@@ -42,7 +42,7 @@ pipeline {
             agent { label 'awsDeploy' }
             steps {
                 sh '''#!/bin/bash
-                    ssh ubuntu@10.1.142 "git clone https://github.com/elmorenox/webapp-on-vpc-with-terraform-and-jenkins.git
+                    ssh ubuntu@54.227.20.138 "git clone https://github.com/elmorenox/webapp-on-vpc-with-terraform-and-jenkins.git
 
                     cd webapp-on-vpc-with-terraform-and-jenkins
 
