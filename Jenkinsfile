@@ -41,34 +41,22 @@ pipeline {
         stage('Deploy') {
             agent { label 'awsDeploy' }
             steps {
-                script {
-                    def remote = [:]
-                    remote.name = 'webapphost'
-                    remote.host = '54.227.20.138'
-                    remote.port = 22
-                    remote.user = 'ubuntu'
+                sh '''#!/bin/bash
+                    ssh ubuntu@10.1.142 "git clone https://github.com/elmorenox/webapp-on-vpc-with-terraform-and-jenkins.git
 
-                    def githubRepoURL = 'https://github.com/elmorenox/webapp-on-vpc-with-terraform-and-jenkins.git'
-                    def remoteDirectory = '/home/ubuntu'
+                    cd webapp-on-vpc-with-terraform-and-jenkins
 
-                    def customCommand = """
-                        git clone ${githubRepoURL} ${remoteDirectory}/webapp-on-vpc-with-terraform-and-jenkins &&
-                        cd ${remoteDirectory}/webapp-on-vpc-with-terraform-and-jenkins &&
-                        python3.7 -m venv test &&
-                        source test/bin/activate &&
-                        pip install pip --upgrade &&
-                        pip install -r requirements.txt &&
-                        pip install gunicorn &&
-                        python database.py &&
-                        sleep 1 &&
-                        python load_data.py &&
-                        sleep 1 &&
-                        python -m gunicorn app:app -b 0.0.0.0 -D
-                    """
-
-                    sshCommand remote: remote, command: customCommand
-                }
-            }
+                    python3.7 -m venv test
+                    source test/bin/activate
+                    pip install pip --upgrade
+                    pip install -r requirements.txt
+                    pip install gunicorn
+                    python database.py
+                    sleep 1
+                    python load_data.py
+                    sleep 1 
+                    python -m gunicorn app:app -b 0.0.0.0 -D"
+                '''
         }
         stage ('Reminder') {
             steps {
