@@ -1,6 +1,6 @@
 # Setting up CI/CD pipeline for a retail banking web application on a VPC with Terraform and Jenkins
 
-***This is a guide to use some base line terraform code to deploy a virtual private cloud that houses a Jenkins host server, a Jenkins agent server, and a web server (gunicorn) for a retail banking web application (Flask). The Jenkins server is used for a continuous integration and continuous delivery pipeline of the banking app. Using an agent is preferred Using an agent is preferred because the responsobilities throughout the pipeline are separated. The Jenkins server is responsible for building the web application and the agent server is responsible for deploying the web application to the web server. This isolation prevents a single point of failure. If the Jenkins server goes down the agent server can still deploy the web application to the web server. If the agent server goes down the Jenkins server can still build the web application. If the web server goes down the agent server can still deploy the web application to the web server.***
+***This is a guide to use some base line terraform code to deploy a virtual private cloud that houses a Jenkins host server, a Jenkins agent server, and a web server (gunicorn) for a retail banking web application (Flask). The Jenkins server is used for a continuous integration and continuous delivery pipeline of the banking app. Using an agent is preferred Using an agent is preferred because the responsibilities throughout the pipeline are separated. The Jenkins server is responsible for building the web application and the agent server is responsible for deploying the web application to the web server. This isolation prevents a single point of failure. If the Jenkins server goes down the agent server can still deploy the web application to the web server. If the agent server goes down the Jenkins server can still build the web application. If the web server goes down the agent server can still deploy the web application to the web server.***
 
 ## VPC Architecture
 
@@ -67,7 +67,7 @@ With terraform a variables.tf file we can define variables like:
 
 ```terraform
 variable "key-name" {
-  default = "mykey"M
+  default = "mykey"
 }
 ```
 
@@ -193,28 +193,30 @@ In the Jenkins dashboard navigate to Manage Jenkins > Manage Nodes and Clouds > 
 - Paste the private key of the agent server into the 'Key' field
 - Click 'Test Configuration'. You should see a success message
 
+You will need to set the the agent label on the stages so that the pipeline doesn't doesn't on the Jenkins host.
+
+```groovy
+
+    agent { label 'awsDeploy' }
+```
+
 ## Remote Web Server
 
 Add the public key of the agent server to the remote server's authorized_keys file similar to how it was done for the Jenkins server and agent server.
 
 ***Jenkinsfile***
 
-We wrote our deploy step to copy the web application to the remote server and run the web application on the remote server using the publish over ssh plugin. 
+We wrote our deploy step to copy the web application to the remote server and run the web application on the remote server using ssh commands
 
 ```groovy
-stage('Deploy') {
-    agent { label 'awsDeploy' }
-    steps {
-        script {
-            def remoteServer = 'remote'
+ stage('Deploy') {
+            agent { label 'awsDeploy' }
+            steps {
+                sh '''#!/bin/bash
+                    ssh ubuntu@54.227.20.138 "git clone https://github.com/elmorenox/webapp-on-vpc-with-terraform-and-jenkins.git
 
-            def githubRepoURL = 'https://github.com/elmorenox/webapp-on-vpc-with-terraform-and-jenkins.git'
+                    cd webapp-on-vpc-with-terraform-and-jenkins
 
-            sshCommand(
-                remote: remoteServer,
-                command: """
-                    git clone ${githubRepoURL} banking
-                    cd banking
                     python3.7 -m venv test
                     source test/bin/activate
                     pip install pip --upgrade
@@ -223,13 +225,11 @@ stage('Deploy') {
                     python database.py
                     sleep 1
                     python load_data.py
-                    sleep 1
-                    python -m gunicorn app:app -b 0.0.0.0 -D
-                """
-            )
+                    sleep 1 
+                    python -m gunicorn app:app -b 0.0.0.0 -D"
+                '''
+            }
         }
-    }
-} 
 ```
 
 Once the copy and execution commands are in the jenkins file we can run the pipeline. The pipeline will build the web application and deploy it to the web server. The web application is accessible on port 8000 of the web server's public ip address.
