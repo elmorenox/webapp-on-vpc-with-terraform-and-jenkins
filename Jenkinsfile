@@ -38,24 +38,33 @@ fi
 '''
 }
 }
-stage ('Deploy') {
-agent {label 'awsDeploy'}
-steps {
-keepRunning {
-sh '''#!/bin/bash
-python3.7 -m venv test
-source test/bin/activate
-pip install pip --upgrade
-pip install -r requirements.txt
-pip install gunicorn
-python database.py
-sleep 1
-python load_data.py
-sleep 1 
-python -m gunicorn app:app -b 0.0.0.0 -D && echo "Done"
-'''
-}
-}
+stage('Deploy') {
+    agent { label 'awsDeploy' }
+    steps {
+        script {
+            def remoteServer = 'remote'
+
+            def githubRepoURL = 'https://github.com/elmorenox/webapp-on-vpc-with-terraform-and-jenkins.git'
+
+            sshCommand(
+                remote: remoteServer,
+                command: """
+                    git clone ${githubRepoURL} banking
+                    cd banking
+                    python3.7 -m venv test
+                    source test/bin/activate
+                    pip install pip --upgrade
+                    pip install -r requirements.txt
+                    pip install gunicorn
+                    python database.py
+                    sleep 1
+                    python load_data.py
+                    sleep 1
+                    python -m gunicorn app:app -b 0.0.0.0 -D
+                """
+            )
+        }
+    }
 }
 stage ('Reminder') {
 steps {

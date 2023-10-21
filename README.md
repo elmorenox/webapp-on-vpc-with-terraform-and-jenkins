@@ -1,4 +1,4 @@
-# Provisioning a virtual private cloud (VPC) with terraform
+# Setting up CI/CD pipeline for a retail banking web application on a VPC with Terraform and Jenkins
 
 ***This is a guide to use some base line terraform code to deploy a virtual private cloud that houses a Jenkins host server, a Jenkins agent server, and a web server (gunicorn) for a retail banking web application (Flask). The Jenkins server is used for a continuous integration and continuous delivery pipeline of the banking app.***
 
@@ -67,7 +67,7 @@ With terraform a variables.tf file we can define variables like:
 
 ```terraform
 variable "key-name" {
-  default = "mykey"
+  default = "mykey"M
 }
 ```
 
@@ -83,7 +83,7 @@ resource "aws_instance" "jenkins" {
 ```
 
 Be sure to include the variables.tf file in the [.gitignore](.gitignore) file so that the variables.tf file is not pushed to github.
-git 
+
 ## Github
 
 Before you build the pipeline you'll need a Github token and use it on Jenkins so that it can pull the repository
@@ -176,20 +176,153 @@ In the Jenkins dashboard navigate to Manage Jenkins > Manage Nodes and Clouds > 
 - Click 'Save'
 - Click 'Back to Dashboard' and you'll see your agent running.
 
+ You need to set up a connection between the agent and the remote server where the web application will be deployed. This is done by adding the public key of the agent server to the remote server's authorized_keys file. This will allow the agent server to ssh into the remote server and run commands on the remote server. You can set up keys was done for the Jenkins server and agent server.
+
+  To make this a little easier we'll use the Jenkins plugin 'Publish Over SSH'. This plugin allows us to add the public key of the agent server to the remote server's authorized_keys file. We can then use the plugin to ssh into the remote server and run commands on the remote server.
+
+- Navigate to Manage Jenkins > Manage Plugins and select the Available tab. Locate this plugin by searching for Publish Over SSH.
+- Click 'Install without restart'
+- Navigate to Manage Jenkins > Configure System
+- Scroll down to the 'Publish over SSH' section
+- Click 'Add'
+- In the 'Name' field add a name. 'remote' works
+- In the 'Hostname' field add the public ip address of the remote server
+- In the 'Username' field add the username of the remote server. 'ubuntu' works
+- In the 'Remote Directory' field add the path to the remote server's home directory. '/home/ubuntu' works
+- In the 'Passphrase' field add the passphrase of the private key of the agent server
+- Paste the private key of the agent server into the 'Key' field
+- Click 'Test Configuration'. You should see a success message
+
+## Remote Web Server
+
+Add the public key of the agent server to the remote server's authorized_keys file similar to how it was done for the Jenkins server and agent server.
+
 ***Jenkinsfile***
 
-In the jenkins file we can use bash to ssh into the web server and deploy the web application. The scp command is used in the jenkins file to copy the setup.sh script onto the web server. The setup.sh script is then executed on the web server. The setup.sh script installs the required software on the web server and starts the web application.
+We wrote our deploy step to copy the web application to the remote server and run the web application on the remote server using the publish over ssh plugin. 
 
-```jenkinsfile
-sh '''#!/bin/bash
-    scp setup.sh ubuntu@10.0.2.89:~/setup.sh
-    ssh ubuntu@10.0.2.89 "chmod +x ~/setup.sh && ~/setup.sh"
-'''
+```groovy
+stage('Deploy') {
+    agent { label 'awsDeploy' }
+    steps {
+        script {
+            def remoteServer = 'remote'
+
+            def githubRepoURL = 'https://github.com/elmorenox/webapp-on-vpc-with-terraform-and-jenkins.git'
+
+            sshCommand(
+                remote: remoteServer,
+                command: """
+                    git clone ${githubRepoURL} banking
+                    cd banking
+                    python3.7 -m venv test
+                    source test/bin/activate
+                    pip install pip --upgrade
+                    pip install -r requirements.txt
+                    pip install gunicorn
+                    python database.py
+                    sleep 1
+                    python load_data.py
+                    sleep 1
+                    python -m gunicorn app:app -b 0.0.0.0 -D
+                """
+            )
+        }
+    }
+} 
 ```
 
 Once the copy and execution commands are in the jenkins file we can run the pipeline. The pipeline will build the web application and deploy it to the web server. The web application is accessible on port 8000 of the web server's public ip address.
 
 ![retail-banking-app](retail-banking-app.png)
+
+## Monitoring
+
+We'll be using the AWS Cloudwatch to create an alarm that monitors memory usage that exceeds 25% respectively
+
+Create an IAM service role. This role will give the Cloudwatch agent, which is installed on the EC2 server to gather and report metrics to Cloudwatch
+
+- Navigate to the IAM service
+- Click on Roles
+- Click 'Create a role'
+- Select 'AWS service' and choose EC2
+- Search for 'CloudWatchAgentAdminPolicy', select, and click 'next'
+- Name the role something appropriate like 'CloudWatchAgentServerRole'
+- Click 'Create role'
+
+Attach security group to the EC2 instance
+
+- Navigate to your instance in the EC2 service
+- Click on 'Actions'
+- In the dropdown, select 'Security' and then 'Modify IAM role'
+- Select the IAM role we created and save
+
+Download, install and configure the Cloudwatch Agent on the EC2 that will run Jenkins and the Flask Application
+
+Download
+
+```bash
+wget https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+```
+
+Install
+
+```bash
+sudo dpkg -i -E ./amazon-cloudwatch-agent.deb
+```
+
+We'll use a wizard to create the Cloudwatch agent config file
+
+```bash
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-wizard
+```
+
+Selections
+
+- 1. linux
+- 1. EC2
+- 1. root
+- 2. no
+- 2. no
+- 1. yes
+- 1. yes
+- 1. yes
+- 1. yes
+- 3. 30s
+- 2. standard
+- 1. yes
+- 2. no
+- 1. yes
+- /var/log/syslog
+- default choice [syslog]
+- default choice [{instance.id}]
+- 2. 1
+- 2. no
+- 2. no
+
+Start the agent
+
+```bash
+sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json
+```
+
+Set up an alarm to inform you when memory usage is over 25%
+
+- Navigate to the Cloudwatch service and click 'create alarm'
+- Select 'create metric'
+- Click on 'CWA agent'
+- Search 'mem'
+- Select 'mem_used_percent'
+- In the condition, select 'Greater/Equal' as the alarm condition
+- An include '25' in the threshold value input field
+- Click next
+- Click on the 'Create new topic' radio button
+- Name your topic something like 'mem-over-25-percent'
+- Include the emails that will receive an email if alarm is triggered
+- click 'next'
+- Name your alarm. I named mine the same as the topic
+- click 'create alarm'
+- You'll need to navigate to your email and confirm the email from the SNS topic. It's likely in spam
 
 ## Improvement
 
