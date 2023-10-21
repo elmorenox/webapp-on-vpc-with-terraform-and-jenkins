@@ -1,5 +1,5 @@
 pipeline {
-agent any
+agent { label 'awsDeploy' }
 stages {
 stage ('Build') {
 steps {
