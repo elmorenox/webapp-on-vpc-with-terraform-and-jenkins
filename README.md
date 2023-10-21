@@ -1,6 +1,6 @@
 # Setting up CI/CD pipeline for a retail banking web application on a VPC with Terraform and Jenkins
 
-***This is a guide to use some base line terraform code to deploy a virtual private cloud that houses a Jenkins host server, a Jenkins agent server, and a web server (gunicorn) for a retail banking web application (Flask). The Jenkins server is used for a continuous integration and continuous delivery pipeline of the banking app.***
+***This is a guide to use some base line terraform code to deploy a virtual private cloud that houses a Jenkins host server, a Jenkins agent server, and a web server (gunicorn) for a retail banking web application (Flask). The Jenkins server is used for a continuous integration and continuous delivery pipeline of the banking app. Using an agent is preferred Using an agent is preferred because the responsobilities throughout the pipeline are separated. The Jenkins server is responsible for building the web application and the agent server is responsible for deploying the web application to the web server. This isolation prevents a single point of failure. If the Jenkins server goes down the agent server can still deploy the web application to the web server. If the agent server goes down the Jenkins server can still build the web application. If the web server goes down the agent server can still deploy the web application to the web server.***
 
 ## VPC Architecture
 
