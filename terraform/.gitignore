@@ -1,0 +1,5 @@
+variables.tf
+*.lock.hcl
+*.tfstate
+*.tfstate.backup
+providers/
