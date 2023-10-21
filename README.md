@@ -1,6 +1,6 @@
 # Setting up CI/CD pipeline for a retail banking web application on a VPC with Terraform and Jenkins
 
-***This is a guide to use some base line terraform code to deploy a virtual private cloud that houses a Jenkins host server, a Jenkins agent server, and a web server (gunicorn) for a retail banking web application (Flask). The Jenkins server is used for a continuous integration and continuous delivery pipeline of the banking app. Using an agent is preferred Using an agent is preferred because the responsibilities throughout the pipeline are separated. The Jenkins server is responsible for building the web application and the agent server is responsible for deploying the web application to the web server. This isolation prevents a single point of failure. If the Jenkins server goes down the agent server can still deploy the web application to the web server. If the agent server goes down the Jenkins server can still build the web application. If the web server goes down the agent server can still deploy the web application to the web server.***
+***This is a guide to use some base line terraform code to deploy a virtual private cloud that houses a Jenkins host server, a Jenkins agent server, and a web server (gunicorn) for a retail banking web application (Flask). The Jenkins server is used as a dashboard for the pipeline, the agent is used for the build, test, and deploying of the application. Using an agent is preferred because the responsibilities throughout the pipeline are separated. This segragation of duties prevents resource contention.***
 
 ## VPC Architecture
 
@@ -11,7 +11,7 @@
 - Amazon creates a default route table for each vpc. We create a custom route table for our public subnets. The custom route table has a route that directs traffic to the internet gateway. The custom route table is associated with the public subnets.
 - The security group is used for both public subnets. The security group allows inbound traffic on port 80, 8080, 8000 (http) and port 22 (ssh). The security group allows outbound traffic on all ports.
 
-![vpc-architecture](vpc-w-terraform.png)
+![vpc-architecture](vpc-w-terraform-jenkins.png)
 
 ## Terraform
 
@@ -235,94 +235,6 @@ We wrote our deploy step to copy the web application to the remote server and ru
 Once the copy and execution commands are in the jenkins file we can run the pipeline. The pipeline will build the web application and deploy it to the web server. The web application is accessible on port 8000 of the web server's public ip address.
 
 ![retail-banking-app](retail-banking-app.png)
-
-## Monitoring
-
-We'll be using the AWS Cloudwatch to create an alarm that monitors memory usage that exceeds 25% respectively
-
-Create an IAM service role. This role will give the Cloudwatch agent, which is installed on the EC2 server to gather and report metrics to Cloudwatch
-
-- Navigate to the IAM service
-- Click on Roles
-- Click 'Create a role'
-- Select 'AWS service' and choose EC2
-- Search for 'CloudWatchAgentAdminPolicy', select, and click 'next'
-- Name the role something appropriate like 'CloudWatchAgentServerRole'
-- Click 'Create role'
-
-Attach security group to the EC2 instance
-
-- Navigate to your instance in the EC2 service
-- Click on 'Actions'
-- In the dropdown, select 'Security' and then 'Modify IAM role'
-- Select the IAM role we created and save
-
-Download, install and configure the Cloudwatch Agent on the EC2 that will run Jenkins and the Flask Application
-
-Download
-
-```bash
-wget https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
-```
-
-Install
-
-```bash
-sudo dpkg -i -E ./amazon-cloudwatch-agent.deb
-```
-
-We'll use a wizard to create the Cloudwatch agent config file
-
-```bash
-sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-config-wizard
-```
-
-Selections
-
-- 1. linux
-- 1. EC2
-- 1. root
-- 2. no
-- 2. no
-- 1. yes
-- 1. yes
-- 1. yes
-- 1. yes
-- 3. 30s
-- 2. standard
-- 1. yes
-- 2. no
-- 1. yes
-- /var/log/syslog
-- default choice [syslog]
-- default choice [{instance.id}]
-- 2. 1
-- 2. no
-- 2. no
-
-Start the agent
-
-```bash
-sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/bin/config.json
-```
-
-Set up an alarm to inform you when memory usage is over 25%
-
-- Navigate to the Cloudwatch service and click 'create alarm'
-- Select 'create metric'
-- Click on 'CWA agent'
-- Search 'mem'
-- Select 'mem_used_percent'
-- In the condition, select 'Greater/Equal' as the alarm condition
-- An include '25' in the threshold value input field
-- Click next
-- Click on the 'Create new topic' radio button
-- Name your topic something like 'mem-over-25-percent'
-- Include the emails that will receive an email if alarm is triggered
-- click 'next'
-- Name your alarm. I named mine the same as the topic
-- click 'create alarm'
-- You'll need to navigate to your email and confirm the email from the SNS topic. It's likely in spam
 
 ## Improvement
 
