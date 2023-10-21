@@ -67,7 +67,7 @@ With terraform a variables.tf file we can define variables like:
 
 ```terraform
 variable "key-name" {
-  default = "mykey"M
+  default = "mykey"
 }
 ```
 
