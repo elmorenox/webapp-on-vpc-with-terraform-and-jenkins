@@ -17,6 +17,8 @@
 
 Terraform is central to this project and helps avoid the manual creation and configurations of resources in AWS. With terraform we can define a resources like a vpc, subnet, security group, etc. in a .tf file. We can then run the terraform code to create the resources in AWS.
 
+Terraform in on a manually with the AWS dashboard.
+
 A terraform project can be started with a simple init command
 
 ```bash
